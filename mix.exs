@@ -10,7 +10,7 @@ defmodule EctoShortcuts.Mixfile do
      start_permanent: Mix.env == :prod,
      deps: deps(),
      description: "Ecto extension adding shortcuts for common usecases",
-     package: package,
+     package: package(),
      name: "EctoShortcuts",
      docs: [source_url: "https://github.com/MishaConway/ecto_shortcuts"]]
   end
