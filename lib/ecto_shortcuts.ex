@@ -10,33 +10,15 @@ defmodule EctoShortcuts do
   require Ecto.Query
 
   defmacro __using__(opts) do
-    unless repo = Keyword.get(opts, :repo) do
-      raise ArgumentError,
-       """
-       expected :repo to be given as an option. Example:
-       use EctoShortcuts, repo: MyApp.Repo
-       """
-    end
-
-    model = Keyword.get opts, :model
-    default_preload = Keyword.get opts, :default_preload
+    @model  opts[:model] || __MODULE__
+    @app    opts[:app]   || @model |> Module.split |> Enum.drop(-1) |> Module.concat
+    @repo   opts[:repo]  || @app |> Module.concat("repo")
+    @preload Keyword.get opts, :default_preload
 
     quote do
       import Ecto
       import Ecto.Changeset
       import Ecto.Query
-
-      def repo do
-        unquote repo
-      end
-
-      def model do
-        unquote(model) || __MODULE__
-      end
-
-      def default_preload do
-        unquote(default_preload)
-      end
 
       defp normalize_attributes( attributes ) do
         if is_map attributes do
@@ -50,10 +32,10 @@ defmodule EctoShortcuts do
       ######### PRELOADING ##########
 
       defp pload( preloadable, opts ) do
-        preloads = normalize_pload_list( opts[:preload] || opts[:preloads] || default_preload || [] )
+        preloads = normalize_pload_list( opts[:preload] || opts[:preloads] || @preload || [] )
 
         if Enum.count(preloads) > 0 do
-          preloadable |> repo.preload(preloads)
+          preloadable |> @repo.preload(preloads)
         else
           preloadable
         end
@@ -61,8 +43,8 @@ defmodule EctoShortcuts do
 
       defp normalize_pload_list( pload_list ) do
         case pload_list do
-          :* -> model.__schema__(:associations)
-          "*" -> model.__schema__(:associations)
+          :* -> @model.__schema__(:associations)
+          "*" -> @model.__schema__(:associations)
           _ -> pload_list
         end
       end
@@ -72,10 +54,10 @@ defmodule EctoShortcuts do
       defp new_changeset(attributes, opts ) do
         disable_validation = false == (opts || [])[:validate]
 
-        if !disable_validation && model.module_info(:exports)[:changeset] do
-          model.changeset struct(model), attributes
+        if !disable_validation && @model.module_info(:exports)[:changeset] do
+          @model.changeset struct(@model), attributes
         else
-          struct(model, attributes)
+          struct(@model, attributes)
         end
       end
 
@@ -90,7 +72,7 @@ defmodule EctoShortcuts do
 
       """
       def insert(attributes, opts \\ []) do
-        repo.insert new_changeset(Enum.into(attributes, %{}), opts)
+        @repo.insert new_changeset(Enum.into(attributes, %{}), opts)
       end
 
       @doc """
@@ -103,7 +85,7 @@ defmodule EctoShortcuts do
 
       """
       def insert!(attributes, opts \\ []) do
-        repo.insert! new_changeset(Enum.into(attributes, %{}), opts)
+        @repo.insert! new_changeset(Enum.into(attributes, %{}), opts)
       end
 
       ######### UPDATES ##########
@@ -117,7 +99,7 @@ defmodule EctoShortcuts do
 
       """
       def update_all(updates, opts \\ []) do
-        repo.update_all(model, updates, opts)
+        @repo.update_all(@model, updates, opts)
       end
 
       defp apply_filter(key, value, query) do
@@ -126,7 +108,7 @@ defmodule EctoShortcuts do
       end
 
       defp reduce_filters(filters) do
-        ecto_query = Ecto.Query.from x in model
+        ecto_query = Ecto.Query.from x in @model
         Enum.reduce(filters, ecto_query, fn(filter, ecto_query) ->
           ecto_query = apply_filter(elem(filter, 0), elem(filter, 1), ecto_query)
         end)
@@ -141,7 +123,7 @@ defmodule EctoShortcuts do
 
       """
       def update_by(filters, updates, opts \\ []) do
-        reduce_filters(filters) |> repo.update_all(normalize_attributes(updates), opts)
+        reduce_filters(filters) |> @repo.update_all(normalize_attributes(updates), opts)
       end
 
 
@@ -179,7 +161,7 @@ defmodule EctoShortcuts do
 
       """
       def delete_all do
-        repo.delete_all model
+        @repo.delete_all @model
       end
 
       @doc """
@@ -191,7 +173,7 @@ defmodule EctoShortcuts do
 
       """
       def delete_by(filters, opts \\ []) do
-        reduce_filters(filters) |> repo.delete_all(opts)
+        reduce_filters(filters) |> @repo.delete_all(opts)
       end
 
 
@@ -210,7 +192,7 @@ defmodule EctoShortcuts do
 
       """
       def get(id, opts \\ []) do
-        repo.get(model, id, opts) |> pload( opts )
+        @repo.get(@model, id, opts) |> pload( opts )
       end
 
       @doc """
@@ -224,7 +206,7 @@ defmodule EctoShortcuts do
 
       """
       def get!(id, opts \\ []) do
-        repo.get!(model, id, opts) |> pload( opts )
+        @repo.get!(@model, id, opts) |> pload( opts )
       end
 
       @doc """
@@ -238,7 +220,7 @@ defmodule EctoShortcuts do
 
       """
       def get_by(filters, opts \\ []) do
-        repo.get_by(model, filters, opts) |> pload( opts )
+        @repo.get_by(@model, filters, opts) |> pload( opts )
       end
 
       @doc """
@@ -252,7 +234,7 @@ defmodule EctoShortcuts do
 
       """
       def get_by!(clauses, opts \\ []) do
-        repo.get_by!(model, clauses, opts) |> pload( opts )
+        @repo.get_by!(@model, clauses, opts) |> pload( opts )
       end
 
       @doc """
@@ -266,7 +248,7 @@ defmodule EctoShortcuts do
 
       """
       def first( opts \\ [] ) do
-        model |> Ecto.Query.first |> repo.one |> pload( opts )
+        @model |> Ecto.Query.first |> @repo.one |> pload( opts )
       end
 
 
@@ -297,26 +279,26 @@ defmodule EctoShortcuts do
           end
         end
 
-        ecto_query = ecto_query || model
+        ecto_query = ecto_query || @model
         ecto_query
         |> Ecto.Query.where(^normalize_attributes(attributes))
-        |> repo.all
+        |> @repo.all
         |> pload(options)
       end
 
       # silly method needed due to macro hell
       defp limit_where(limit) do
-        Ecto.Query.from(model, [limit: ^limit])
+        Ecto.Query.from(@model, [limit: ^limit])
       end
 
       # silly method needed due to macro hell
       defp order_by_where(order_by) do
-        Ecto.Query.from(model, [order_by: ^order_by])
+        Ecto.Query.from(@model, [order_by: ^order_by])
       end
 
       # silly method needed due to macro hell
       defp limit_order_by_where(limit, order_by) do
-        Ecto.Query.from(model, [limit: ^limit, order_by: ^order_by])
+        Ecto.Query.from(@model, [limit: ^limit, order_by: ^order_by])
       end
 
       @doc """
@@ -328,10 +310,10 @@ defmodule EctoShortcuts do
 
       """
       def first_where(attributes) do
-        model
+        @model
         |> Ecto.Query.where(^normalize_attributes(attributes))
         |> Ecto.Query.first
-        |> repo.one
+        |> @repo.one
       end
 
       @doc """
@@ -379,7 +361,7 @@ defmodule EctoShortcuts do
 
       """
       def all(opts \\ []) do
-        model |> repo.all |> pload(opts)
+        @model |> @repo.all |> pload(opts)
       end
 
       @doc """
@@ -391,7 +373,7 @@ defmodule EctoShortcuts do
 
       """
       def count do
-        repo.one(Ecto.Query.from p in model, select: count("id"))
+        @repo.one(Ecto.Query.from p in @model, select: count("id"))
       end
 
 
@@ -404,9 +386,9 @@ defmodule EctoShortcuts do
 
       """
       def count_where(filters) do
-        Ecto.Query.from(p in model, select: count("id"))
+        Ecto.Query.from(p in @model, select: count("id"))
         |> Ecto.Query.where(^normalize_attributes(filters))
-        |> repo.one
+        |> @repo.one
       end
     end
   end
